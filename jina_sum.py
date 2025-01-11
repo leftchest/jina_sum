@@ -58,7 +58,12 @@ class JinaSum(Plugin):
             
             # 每次启动时重置缓存
             self.pending_messages = {}  # 待处理消息缓存
-            
+
+            # 加载 OpenAI API 相关配置  # 修改点：加载 OpenAI API 相关的配置
+            self.open_ai_api_base = self.config.get("open_ai_api_base")
+            self.open_ai_api_key = self.config.get("open_ai_api_key")
+            self.open_ai_model = self.config.get("open_ai_model")
+
             logger.info(f"[JinaSum] inited, config={self.config}")
             self.handlers[Event.ON_HANDLE_CONTEXT] = self.on_handle_context
         except Exception as e:
@@ -188,26 +193,23 @@ class JinaSum(Plugin):
             
             # 构造提示词和内容
             sum_prompt = f"{self.prompt}\n\n'''{target_url_content}'''"
-            
-            # 修改 context 内容，传递给下一个插件处理
-            e_context['context'].type = ContextType.TEXT
-            e_context['context'].content = sum_prompt
-            
+
+            # 调用 OpenAI API 进行总结 # 修改点：调用 OpenAI API 进行总结
             try:
-                # 确保设置一个默认的 reply，以防后续插件没有设置
-                default_reply = Reply(ReplyType.TEXT, "抱歉，处理过程中出现错误")
-                e_context["reply"] = default_reply
-                
-                # 继续传递给下一个插件处理
-                e_context.action = EventAction.CONTINUE
-                logger.debug(f"[JinaSum] Passing content to next plugin: length={len(sum_prompt)}")
-                return
-                
+                openai_payload = self._get_openai_payload(target_url_content=target_url_content) # 修改点：使用新的方法获取 payload
+                openai_headers = self._get_openai_headers()
+                openai_chat_url = self._get_openai_chat_url()
+                response = requests.post(openai_chat_url, headers=openai_headers, json=openai_payload, timeout=60)
+                response.raise_for_status()
+                summary = response.json()['choices'][0]['message']['content']
+                reply = Reply(ReplyType.TEXT, summary)
+                e_context["reply"] = reply
+                e_context.action = EventAction.BREAK_PASS
+
             except Exception as e:
-                logger.warning(f"[JinaSum] Failed to handle context: {str(e)}")
-                # 如果出错，确保有一个 reply
-                error_reply = Reply(ReplyType.ERROR, "处理过程中出现错误")
-                e_context["reply"] = error_reply
+                logger.error(f"[JinaSum] Failed to get summary from OpenAI: {str(e)}")
+                reply = Reply(ReplyType.ERROR, f"内容总结出现错误: {str(e)}")
+                e_context["reply"] = reply
                 e_context.action = EventAction.BREAK_PASS
             
         except Exception as e:
@@ -310,6 +312,7 @@ class JinaSum(Plugin):
         return {
             'Authorization': f"Bearer {self.open_ai_api_key}",
             'Host': urlparse(self.open_ai_api_base).netloc
+            'Content-Type': 'application/json' #  修改点：添加 Content-Type
         }
 
     def _get_openai_payload(self, target_url_content):
