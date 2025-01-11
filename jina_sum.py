@@ -311,7 +311,7 @@ class JinaSum(Plugin):
     def _get_openai_headers(self):
         return {
             'Authorization': f"Bearer {self.open_ai_api_key}",
-            'Host': urlparse(self.open_ai_api_base).netloc
+            'Host': urlparse(self.open_ai_api_base).netloc,
             'Content-Type': 'application/json' #  修改点：添加 Content-Type
         }
 
