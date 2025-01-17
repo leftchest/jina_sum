@@ -460,7 +460,7 @@ class JinaSum(Plugin):
             e_context.action = EventAction.BREAK_PASS
 
     def get_help_text(self, verbose=False, **kwargs):
-        help_text = "网页内容总结插件\n"
+        help_text = "网页内容总结\n"
         if not verbose:
             return help_text
 
